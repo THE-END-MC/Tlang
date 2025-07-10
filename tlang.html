@@ -147,6 +147,26 @@
             display: none;
             border: 4px dashed #3498db;
         }
+        .input-prompt {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #2c3e50;
+            color: white;
+            padding: 20px;
+            border-radius: 5px;
+            z-index: 1000;
+            display: none;
+        }
+        .input-prompt input {
+            padding: 8px;
+            width: 300px;
+            margin-top: 10px;
+        }
+        .input-prompt button {
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
@@ -171,18 +191,13 @@
 
 print("欢迎使用T语言IDE")
 
-var a = 1
-print("变量a的值是: " + a)
+var a = input("请输入一个数字:")
+print("你输入的数字是: " + a)
 
-if a = 1:
-    print("条件成立")
-else:
-    print("条件不成立")
-
-如果 a = 2:
-    print("中文条件成立")
+if a = "1":
+    print("你输入了1")
 否则:
-    print("中文条件不成立")
+    print("你输入的不是1")
 
 exit</textarea>
                 </div>
@@ -203,6 +218,12 @@ exit</textarea>
         </div>
     </div>
 
+    <div class="input-prompt" id="input-prompt">
+        <div id="prompt-text"></div>
+        <input type="text" id="input-field">
+        <button id="submit-input">确定</button>
+    </div>
+
     <script>
         // 获取DOM元素
         const codeEditor = document.getElementById('code-editor');
@@ -216,6 +237,10 @@ exit</textarea>
         const lineNumbers = document.getElementById('line-numbers');
         const editorPanel = document.getElementById('editor-panel');
         const dropOverlay = document.getElementById('drop-overlay');
+        const inputPrompt = document.getElementById('input-prompt');
+        const promptText = document.getElementById('prompt-text');
+        const inputField = document.getElementById('input-field');
+        const submitInput = document.getElementById('submit-input');
 
         // T语言解析器
         class TLanguageParser {
@@ -244,10 +269,16 @@ exit</textarea>
                 this.currentDirectory = '/';
                 this.shouldExit = false;
                 this.outputCallback = null;
+                this.inputCallback = null;
+                this.currentInputVar = null;
             }
 
             setOutputCallback(callback) {
                 this.outputCallback = callback;
+            }
+
+            setInputCallback(callback) {
+                this.inputCallback = callback;
             }
 
             output(text) {
@@ -256,7 +287,7 @@ exit</textarea>
                 }
             }
 
-            parse(code) {
+            async parse(code) {
                 const lines = code.split('\n');
                 let i = 0;
                 while (i < lines.length) {
@@ -280,7 +311,7 @@ exit</textarea>
                     
                     // 处理变量和函数定义
                     if (line.includes(' = ') && !['if ', '如果 ', 'elif '].some(kw => line.startsWith(kw))) {
-                        this._handleAssignment(line);
+                        await this._handleAssignment(line);
                         i++;
                     } else if (line.startsWith('st function.')) {
                         const funcBody = [];
@@ -292,7 +323,7 @@ exit</textarea>
                         this._handleFunctionDefinition(line, funcBody);
                         i = j;
                     } else if (line.startsWith('f.')) {
-                        this._handleFunctionCall(line);
+                        await this._handleFunctionCall(line);
                         i++;
                     } else if (line.startsWith('if ') || line.startsWith('如果 ')) {
                         const ifBlocks = [];
@@ -332,13 +363,13 @@ exit</textarea>
                             }
                         }
                         
-                        this._handleIfStatement(ifBlocks);
+                        await this._handleIfStatement(ifBlocks);
                         i = j;
                     } else if (line.startsWith('print(')) {
                         this._handlePrint(line);
                         i++;
                     } else if (line.startsWith('input(')) {
-                        this._handleInput(line);
+                        await this._handleInput(line);
                         i++;
                     } else if (line === 'exit') {
                         this.shouldExit = true;
@@ -386,7 +417,7 @@ exit</textarea>
                 }
             }
 
-            _handleAssignment(line) {
+            async _handleAssignment(line) {
                 try {
                     const parts = line.split(' = ');
                     let varName = parts[0].trim();
@@ -425,7 +456,7 @@ exit</textarea>
                 }
             }
 
-            _handleIfStatement(blocks) {
+            async _handleIfStatement(blocks) {
                 try {
                     let executed = false;
                     for (const block of blocks) {
@@ -437,7 +468,7 @@ exit</textarea>
                             if (!executed) {
                                 for (const stmt of block.body) {
                                     if (this.shouldExit) return;
-                                    this.parse(stmt);
+                                    await this.parse(stmt);
                                 }
                             }
                             break;
@@ -463,14 +494,14 @@ exit</textarea>
                                         executed = true;
                                         for (const stmt of block.body) {
                                             if (this.shouldExit) return;
-                                            this.parse(stmt);
+                                            await this.parse(stmt);
                                         }
                                     }
                                 } else if (String(varValue) === cleanValue) {
                                     executed = true;
                                     for (const stmt of block.body) {
                                         if (this.shouldExit) return;
-                                        this.parse(stmt);
+                                        await this.parse(stmt);
                                     }
                                 }
                             } catch (e) {
@@ -500,7 +531,7 @@ exit</textarea>
                 }
             }
 
-            _handleFunctionCall(line) {
+            async _handleFunctionCall(line) {
                 try {
                     const call = line.substring(2).trim();
                     const [funcName, args] = call.split('(');
@@ -521,7 +552,7 @@ exit</textarea>
                     // 执行函数体
                     for (const funcLine of func.body) {
                         if (this.shouldExit) break;
-                        this.parse(funcLine);
+                        await this.parse(funcLine);
                     }
                     
                     // 恢复变量状态
@@ -531,22 +562,42 @@ exit</textarea>
                 }
             }
 
-            _handleInput(line) {
-                try {
-                    if (line.includes(' = ')) {
-                        const [varName, inputExpr] = line.split(' = ').map(s => s.trim());
-                        const promptVar = inputExpr.substring(6, inputExpr.length - 1).trim();
-                        const prompt = this.variables[promptVar] || promptVar;
-                        const value = prompt ? prompt + ' ' : '';
-                        this.variables[varName] = value;
-                    } else {
-                        const promptVar = line.substring(6, line.length - 1).trim();
-                        const prompt = this.variables[promptVar] || promptVar;
-                        const value = prompt ? prompt + ' ' : '';
+            async _handleInput(line) {
+                return new Promise((resolve) => {
+                    try {
+                        let promptText = '';
+                        let varName = null;
+                        
+                        if (line.includes(' = ')) {
+                            // 处理类似 a = input("提示") 的情况
+                            const parts = line.split(' = ');
+                            varName = parts[0].trim();
+                            const inputExpr = parts[1].trim();
+                            
+                            // 提取提示文本
+                            const promptStart = inputExpr.indexOf('(') + 1;
+                            const promptEnd = inputExpr.lastIndexOf(')');
+                            promptText = inputExpr.substring(promptStart, promptEnd).replace(/^['"]|['"]$/g, '');
+                        } else {
+                            // 处理类似 input("提示") 的情况
+                            const promptStart = line.indexOf('(') + 1;
+                            const promptEnd = line.lastIndexOf(')');
+                            promptText = line.substring(promptStart, promptEnd).replace(/^['"]|['"]$/g, '');
+                        }
+                        
+                        // 显示输入提示框
+                        this.currentInputVar = varName;
+                        this.inputCallback(promptText, (value) => {
+                            if (varName) {
+                                this.variables[varName] = value;
+                            }
+                            resolve();
+                        });
+                    } catch (e) {
+                        this.output(`[错误] 输入语句解析失败: ${e}`);
+                        resolve();
                     }
-                } catch (e) {
-                    this.output(`[错误] 输入语句解析失败: ${e}`);
-                }
+                });
             }
         }
 
@@ -555,6 +606,29 @@ exit</textarea>
         parser.setOutputCallback(text => {
             outputPanel.textContent += text + '\n';
             outputPanel.scrollTop = outputPanel.scrollHeight;
+        });
+
+        parser.setInputCallback((prompt, callback) => {
+            promptText.textContent = prompt;
+            inputField.value = '';
+            inputPrompt.style.display = 'block';
+            inputField.focus();
+            
+            const handleSubmit = () => {
+                callback(inputField.value);
+                inputPrompt.style.display = 'none';
+                submitInput.removeEventListener('click', handleSubmit);
+                inputField.removeEventListener('keypress', handleKeyPress);
+            };
+            
+            const handleKeyPress = (e) => {
+                if (e.key === 'Enter') {
+                    handleSubmit();
+                }
+            };
+            
+            submitInput.addEventListener('click', handleSubmit);
+            inputField.addEventListener('keypress', handleKeyPress);
         });
 
         // 更新行号
@@ -567,13 +641,13 @@ exit</textarea>
         }
 
         // 运行代码
-        function runCode() {
+        async function runCode() {
             outputPanel.textContent = '';
             statusBar.textContent = '运行中...';
             
             try {
                 parser.shouldExit = false;
-                parser.parse(codeEditor.value);
+                await parser.parse(codeEditor.value);
                 statusBar.textContent = '运行完成';
             } catch (e) {
                 outputPanel.textContent += `[错误] ${e}\n`;
