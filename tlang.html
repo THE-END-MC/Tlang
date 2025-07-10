@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>T语言IDE</title>
+    <style>
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+        .header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 10px;
+            text-align: center;
+            font-size: 1.5em;
+            border-radius: 5px 5px 0 0;
+        }
+        .editor-container {
+            display: flex;
+            flex: 1;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .editor-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            overflow: hidden;
+            position: relative;
+        }
+        .panel-header {
+            background-color: #34495e;
+            color: white;
+            padding: 8px 15px;
+            font-size: 0.9em;
+            display: flex;
+            justify-content: space-between;
+        }
+        .editor {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            resize: none;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            tab-size: 4;
+            outline: none;
+            white-space: pre;
+        }
+        #code-editor {
+            background-color: #f8f8f8;
+            color: #333;
+        }
+        #output {
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            overflow-y: auto;
+        }
+        .button-container {
+            display: flex;
+            gap: 10px;
+            padding: 10px;
+            background-color: #ecf0f1;
+            border-radius: 0 0 5px 5px;
+        }
+        button {
+            padding: 8px 15px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        #run-btn {
+            background-color: #2ecc71;
+        }
+        #run-btn:hover {
+            background-color: #27ae60;
+        }
+        #clear-btn {
+            background-color: #e74c3c;
+        }
+        #clear-btn:hover {
+            background-color: #c0392b;
+        }
+        .file-actions {
+            display: flex;
+            gap: 5px;
+        }
+        .status-bar {
+            background-color: #34495e;
+            color: #bdc3c7;
+            padding: 5px 10px;
+            font-size: 0.8em;
+            border-radius: 0 0 5px 5px;
+        }
+        .line-numbers {
+            width: 40px;
+            background-color: #f0f0f0;
+            padding: 10px;
+            text-align: right;
+            color: #999;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            overflow: hidden;
+        }
+        .editor-wrapper {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        .drop-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(52, 152, 219, 0.7);
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 2em;
+            z-index: 100;
+            display: none;
+            border: 4px dashed #3498db;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            T语言IDE
+        </div>
+        <div class="editor-container">
+            <div class="editor-panel" id="editor-panel">
+                <div class="drop-overlay" id="drop-overlay">拖放文件到这里</div>
+                <div class="panel-header">
+                    <span>编辑器</span>
+                    <div class="file-actions">
+                        <button id="new-btn">新建</button>
+                        <button id="open-btn">打开</button>
+                        <button id="save-btn">保存</button>
+                    </div>
+                </div>
+                <div class="editor-wrapper">
+                    <div class="line-numbers" id="line-numbers">1</div>
+                    <textarea id="code-editor" class="editor" spellcheck="false">@add.os
+
+print("欢迎使用T语言IDE")
+
+var a = 1
+print("变量a的值是: " + a)
+
+if a = 1:
+    print("条件成立")
+else:
+    print("条件不成立")
+
+如果 a = 2:
+    print("中文条件成立")
+否则:
+    print("中文条件不成立")
+
+exit</textarea>
+                </div>
+                <div class="button-container">
+                    <button id="run-btn">运行 (F5)</button>
+                    <button id="clear-btn">清空输出</button>
+                </div>
+            </div>
+            <div class="editor-panel">
+                <div class="panel-header">
+                    <span>输出</span>
+                </div>
+                <pre id="output" class="editor"></pre>
+                <div class="status-bar" id="status-bar">
+                    就绪
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 获取DOM元素
+        const codeEditor = document.getElementById('code-editor');
+        const outputPanel = document.getElementById('output');
+        const runBtn = document.getElementById('run-btn');
+        const clearBtn = document.getElementById('clear-btn');
+        const newBtn = document.getElementById('new-btn');
+        const openBtn = document.getElementById('open-btn');
+        const saveBtn = document.getElementById('save-btn');
+        const statusBar = document.getElementById('status-bar');
+        const lineNumbers = document.getElementById('line-numbers');
+        const editorPanel = document.getElementById('editor-panel');
+        const dropOverlay = document.getElementById('drop-overlay');
+
+        // T语言解析器
+        class TLanguageParser {
+            constructor() {
+                this.variables = {};
+                this.timers = {};
+                this.functions = {};
+                this.keywords = {
+                    '如果': 'if',
+                    '否则': 'else',
+                    'elif': 'elif',
+                    'exit': 'exit',
+                    'delete': 'delete',
+                    'create': 'create',
+                    'create2': 'create2',
+                    'cd': 'cd',
+                    'edit': 'edit',
+                    'start': 'start',
+                    'kill': 'kill',
+                    'send': 'send',
+                    'add.gui': 'add.gui',
+                    'open.gui': 'open.gui',
+                    'set.gui': 'set.gui',
+                    'reset': 'reset'
+                };
+                this.currentDirectory = '/';
+                this.shouldExit = false;
+                this.outputCallback = null;
+            }
+
+            setOutputCallback(callback) {
+                this.outputCallback = callback;
+            }
+
+            output(text) {
+                if (this.outputCallback) {
+                    this.outputCallback(text);
+                }
+            }
+
+            parse(code) {
+                const lines = code.split('\n');
+                let i = 0;
+                while (i < lines.length) {
+                    if (this.shouldExit) {
+                        break;
+                    }
+                    
+                    let line = lines[i].trim();
+                    if (!line || line.startsWith('#(') || line.startsWith('//')) {
+                        i++;
+                        continue;
+                    }
+                    
+                    // 处理库导入
+                    if (line.startsWith('@add.')) {
+                        const libName = line.substring(5).trim();
+                        this.output(`[系统] 尝试导入库: ${libName}`);
+                        i++;
+                        continue;
+                    }
+                    
+                    // 处理变量和函数定义
+                    if (line.includes(' = ') && !['if ', '如果 ', 'elif '].some(kw => line.startsWith(kw))) {
+                        this._handleAssignment(line);
+                        i++;
+                    } else if (line.startsWith('st function.')) {
+                        const funcBody = [];
+                        let j = i + 1;
+                        while (j < lines.length && (lines[j].startsWith('    ') || lines[j].trim() === '')) {
+                            funcBody.push(lines[j].substring(4));
+                            j++;
+                        }
+                        this._handleFunctionDefinition(line, funcBody);
+                        i = j;
+                    } else if (line.startsWith('f.')) {
+                        this._handleFunctionCall(line);
+                        i++;
+                    } else if (line.startsWith('if ') || line.startsWith('如果 ')) {
+                        const ifBlocks = [];
+                        let condition = line;
+                        let body = [];
+                        let j = i + 1;
+                        while (j < lines.length && (lines[j].startsWith('    ') || lines[j].trim() === '')) {
+                            body.push(lines[j].substring(4));
+                            j++;
+                        }
+                        ifBlocks.push({ type: 'if', condition, body });
+                        
+                        // 检查是否有elif或else
+                        while (j < lines.length) {
+                            const nextLine = lines[j].trim();
+                            if (nextLine.startsWith('elif ') || nextLine.startsWith('否则如果 ')) {
+                                condition = nextLine;
+                                body = [];
+                                j++;
+                                while (j < lines.length && (lines[j].startsWith('    ') || lines[j].trim() === '')) {
+                                    body.push(lines[j].substring(4));
+                                    j++;
+                                }
+                                ifBlocks.push({ type: 'elif', condition, body });
+                            } else if (nextLine === 'else:' || nextLine === '否则:') {
+                                condition = nextLine;
+                                body = [];
+                                j++;
+                                while (j < lines.length && (lines[j].startsWith('    ') || lines[j].trim() === '')) {
+                                    body.push(lines[j].substring(4));
+                                    j++;
+                                }
+                                ifBlocks.push({ type: 'else', condition, body });
+                                break;
+                            } else {
+                                break;
+                            }
+                        }
+                        
+                        this._handleIfStatement(ifBlocks);
+                        i = j;
+                    } else if (line.startsWith('print(')) {
+                        this._handlePrint(line);
+                        i++;
+                    } else if (line.startsWith('input(')) {
+                        this._handleInput(line);
+                        i++;
+                    } else if (line === 'exit') {
+                        this.shouldExit = true;
+                        i++;
+                    } else {
+                        this.output(`[警告] 无法识别的语句: ${line}`);
+                        i++;
+                    }
+                }
+            }
+
+            _handlePrint(line) {
+                try {
+                    let content = line.substring(6, line.length - 1).trim();
+                    // 处理字符串拼接和变量替换
+                    const parts = content.split('+').map(part => part.trim());
+                    let result = '';
+                    
+                    for (const part of parts) {
+                        if ((part.startsWith('"') && part.endsWith('"')) || 
+                            (part.startsWith("'") && part.endsWith("'"))) {
+                            // 字符串部分
+                            result += part.substring(1, part.length - 1);
+                        } else if (part in this.variables) {
+                            // 变量部分
+                            result += this.variables[part];
+                        } else {
+                            // 其他情况（可能是表达式）
+                            try {
+                                // 替换变量引用
+                                let expr = part;
+                                for (const [varName, varValue] of Object.entries(this.variables)) {
+                                    expr = expr.replace(new RegExp(varName, 'g'), varValue);
+                                }
+                                result += eval(expr);
+                            } catch {
+                                result += part;
+                            }
+                        }
+                    }
+                    
+                    this.output(result);
+                } catch (e) {
+                    this.output(`[错误] 打印语句解析失败: ${e}`);
+                }
+            }
+
+            _handleAssignment(line) {
+                try {
+                    const parts = line.split(' = ');
+                    let varName = parts[0].trim();
+                    let valueExpr = parts.slice(1).join(' = ').trim();
+                    
+                    // 处理var关键字
+                    if (varName.startsWith('var ')) {
+                        varName = varName.substring(4).trim();
+                    }
+                    
+                    // 处理特殊时间赋值
+                    if (valueExpr === 'hour') {
+                        this.variables[varName] = new Date().getHours();
+                        return;
+                    } else if (valueExpr === 'minute') {
+                        this.variables[varName] = new Date().getMinutes();
+                        return;
+                    } else if (valueExpr === 'second') {
+                        this.variables[varName] = new Date().getSeconds();
+                        return;
+                    }
+                    
+                    // 处理数学表达式
+                    try {
+                        // 替换变量引用
+                        for (const [varName, varValue] of Object.entries(this.variables)) {
+                            valueExpr = valueExpr.replace(new RegExp(varName, 'g'), varValue);
+                        }
+                        this.variables[varName] = eval(valueExpr);
+                    } catch {
+                        // 如果不是数学表达式，直接存储字符串
+                        this.variables[varName] = valueExpr.replace(/^['"]|['"]$/g, '');
+                    }
+                } catch (e) {
+                    this.output(`[错误] 赋值语句解析失败: ${e}`);
+                }
+            }
+
+            _handleIfStatement(blocks) {
+                try {
+                    let executed = false;
+                    for (const block of blocks) {
+                        if (executed && block.type !== 'else') {
+                            continue;
+                        }
+                        
+                        if (block.type === 'else') {
+                            if (!executed) {
+                                for (const stmt of block.body) {
+                                    if (this.shouldExit) return;
+                                    this.parse(stmt);
+                                }
+                            }
+                            break;
+                        }
+                        
+                        // 解析条件
+                        let condPart = block.condition.split(':')[0];
+                        condPart = condPart.replace('如果', '').replace('否则如果', '').replace('elif', '').replace('if', '').trim();
+                        
+                        if (condPart.includes(' = ')) {
+                            const [varName, value] = condPart.split(' = ').map(s => s.trim());
+                            const cleanValue = value.replace(/^['"]|['"]$/g, '');
+                            
+                            if (!(varName in this.variables)) {
+                                this.output(`[警告] 变量 '${varName}' 未定义`);
+                                continue;
+                            }
+                            
+                            try {
+                                const varValue = this.variables[varName];
+                                if (typeof varValue === 'number' && !isNaN(cleanValue)) {
+                                    if (varValue == parseFloat(cleanValue)) {
+                                        executed = true;
+                                        for (const stmt of block.body) {
+                                            if (this.shouldExit) return;
+                                            this.parse(stmt);
+                                        }
+                                    }
+                                } else if (String(varValue) === cleanValue) {
+                                    executed = true;
+                                    for (const stmt of block.body) {
+                                        if (this.shouldExit) return;
+                                        this.parse(stmt);
+                                    }
+                                }
+                            } catch (e) {
+                                this.output(`[错误] 条件判断失败: ${e}`);
+                            }
+                        } else {
+                            this.output(`[警告] 不支持的条件表达式: ${condPart}`);
+                        }
+                    }
+                } catch (e) {
+                    this.output(`[错误] 条件语句解析失败: ${e}`);
+                }
+            }
+
+            _handleFunctionDefinition(line, funcBody) {
+                try {
+                    const def = line.substring('st function.'.length).trim();
+                    const [funcName, params] = def.split('(');
+                    const param = params.split(')')[0].trim();
+                    
+                    this.functions[funcName.trim()] = {
+                        param,
+                        body: funcBody
+                    };
+                } catch (e) {
+                    this.output(`[错误] 函数定义解析失败: ${e}`);
+                }
+            }
+
+            _handleFunctionCall(line) {
+                try {
+                    const call = line.substring(2).trim();
+                    const [funcName, args] = call.split('(');
+                    const argValue = args.split(')')[0].trim();
+                    
+                    if (!(funcName in this.functions)) {
+                        this.output(`[错误] 函数 '${funcName}' 未定义`);
+                        return;
+                    }
+                    
+                    const func = this.functions[funcName];
+                    // 保存当前变量状态
+                    const oldVars = {...this.variables};
+                    
+                    // 设置参数值
+                    this.variables[func.param] = argValue.replace(/^['"]|['"]$/g, '');
+                    
+                    // 执行函数体
+                    for (const funcLine of func.body) {
+                        if (this.shouldExit) break;
+                        this.parse(funcLine);
+                    }
+                    
+                    // 恢复变量状态
+                    this.variables = oldVars;
+                } catch (e) {
+                    this.output(`[错误] 函数调用失败: ${e}`);
+                }
+            }
+
+            _handleInput(line) {
+                try {
+                    if (line.includes(' = ')) {
+                        const [varName, inputExpr] = line.split(' = ').map(s => s.trim());
+                        const promptVar = inputExpr.substring(6, inputExpr.length - 1).trim();
+                        const prompt = this.variables[promptVar] || promptVar;
+                        const value = prompt ? prompt + ' ' : '';
+                        this.variables[varName] = value;
+                    } else {
+                        const promptVar = line.substring(6, line.length - 1).trim();
+                        const prompt = this.variables[promptVar] || promptVar;
+                        const value = prompt ? prompt + ' ' : '';
+                    }
+                } catch (e) {
+                    this.output(`[错误] 输入语句解析失败: ${e}`);
+                }
+            }
+        }
+
+        // 初始化解析器
+        const parser = new TLanguageParser();
+        parser.setOutputCallback(text => {
+            outputPanel.textContent += text + '\n';
+            outputPanel.scrollTop = outputPanel.scrollHeight;
+        });
+
+        // 更新行号
+        function updateLineNumbers() {
+            const lines = codeEditor.value.split('\n');
+            lineNumbers.innerHTML = '';
+            for (let i = 1; i <= lines.length; i++) {
+                lineNumbers.innerHTML += i + '<br>';
+            }
+        }
+
+        // 运行代码
+        function runCode() {
+            outputPanel.textContent = '';
+            statusBar.textContent = '运行中...';
+            
+            try {
+                parser.shouldExit = false;
+                parser.parse(codeEditor.value);
+                statusBar.textContent = '运行完成';
+            } catch (e) {
+                outputPanel.textContent += `[错误] ${e}\n`;
+                statusBar.textContent = '运行出错';
+            }
+        }
+
+        // 清空输出
+        function clearOutput() {
+            outputPanel.textContent = '';
+            statusBar.textContent = '就绪';
+        }
+
+        // 新建文件
+        function newFile() {
+            if (confirm('确定要新建文件吗？当前内容将丢失。')) {
+                codeEditor.value = '';
+                updateLineNumbers();
+            }
+        }
+
+        // 打开文件
+        function openFile() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.tl';
+            
+            input.onchange = e => {
+                const file = e.target.files[0];
+                const reader = new FileReader();
+                
+                reader.onload = event => {
+                    codeEditor.value = event.target.result;
+                    updateLineNumbers();
+                    statusBar.textContent = `已加载: ${file.name}`;
+                };
+                
+                reader.readAsText(file);
+            };
+            
+            input.click();
+        }
+
+        // 保存文件
+        function saveFile() {
+            const blob = new Blob([codeEditor.value], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'script.tl';
+            a.click();
+            
+            URL.revokeObjectURL(url);
+            statusBar.textContent = '文件已保存为 script.tl';
+        }
+
+        // 拖放文件处理
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            dropOverlay.style.display = 'flex';
+        }
+
+        function handleDragLeave(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            dropOverlay.style.display = 'none';
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            dropOverlay.style.display = 'none';
+            
+            const file = e.dataTransfer.files[0];
+            if (file && file.name.endsWith('.tl')) {
+                const reader = new FileReader();
+                reader.onload = event => {
+                    codeEditor.value = event.target.result;
+                    updateLineNumbers();
+                    statusBar.textContent = `已加载: ${file.name}`;
+                    runCode(); // 自动执行拖放的文件
+                };
+                reader.readAsText(file);
+            } else {
+                statusBar.textContent = '请拖放.tl文件';
+            }
+        }
+
+        // 事件监听
+        codeEditor.addEventListener('input', updateLineNumbers);
+        codeEditor.addEventListener('keydown', e => {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                const start = codeEditor.selectionStart;
+                const end = codeEditor.selectionEnd;
+                codeEditor.value = codeEditor.value.substring(0, start) + '    ' + codeEditor.value.substring(end);
+                codeEditor.selectionStart = codeEditor.selectionEnd = start + 4;
+                updateLineNumbers();
+            } else if (e.key === 'F5') {
+                e.preventDefault();
+                runCode();
+            }
+        });
+
+        // 拖放事件
+        editorPanel.addEventListener('dragover', handleDragOver);
+        editorPanel.addEventListener('dragleave', handleDragLeave);
+        editorPanel.addEventListener('drop', handleDrop);
+
+        runBtn.addEventListener('click', runCode);
+        clearBtn.addEventListener('click', clearOutput);
+        newBtn.addEventListener('click', newFile);
+        openBtn.addEventListener('click', openFile);
+        saveBtn.addEventListener('click', saveFile);
+
+        // 初始化
+        updateLineNumbers();
+    </script>
+</body>
+</html>
