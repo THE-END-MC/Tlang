@@ -1,3 +1,4 @@
-# .gitattributes 文件内容
+
 *.tl linguist-language=TLang
 *.tl linguist-detectable=true
+*.tl linguist-vendored=false
